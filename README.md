@@ -3,6 +3,8 @@
 [![PyPI version](https://img.shields.io/pypi/v/egora)](https://pypi.org/project/egora/)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![Dataset on HF](https://img.shields.io/badge/🤗_Dataset-egora--benchmarks-yellow)](https://huggingface.co/datasets/ArsSocratica/egora-benchmarks)
+[![arXiv](https://img.shields.io/badge/arXiv-2602.05192-b31b1b.svg)](https://arxiv.org/abs/2602.05192)
 
 **EgoRA** is a dynamic, information-theoretic regularization method for fine-tuning neural networks. It uses the model's own output entropy to modulate an orthogonality penalty on LoRA adapter weights, preventing knowledge destruction and rank collapse during adaptation.
 
@@ -167,6 +169,30 @@ See the [`examples/`](https://github.com/ArsSocratica/EgoRA/tree/main/examples) 
 - **`quickstart_training.py`** — End-to-end fine-tuning with EgoRA + post-training diagnostics
 - **`diagnostics_only.py`** — Standalone rotation analysis between any two checkpoints
 - **`peft_compat_example.py`** — PEFT-style API demo with save/load/merge
+
+## Resources
+
+| | Link |
+|---|---|
+| 📦 **PyPI** | [`pip install egora`](https://pypi.org/project/egora/) |
+| 💻 **GitHub** | [ArsSocratica/EgoRA](https://github.com/ArsSocratica/EgoRA) |
+| 🤗 **Dataset** | [ArsSocratica/egora-benchmarks](https://huggingface.co/datasets/ArsSocratica/egora-benchmarks) — benchmark results, rotation geometry, training curves |
+| 📄 **Paper** | [arXiv:2602.05192](https://arxiv.org/abs/2602.05192) |
+
+### Benchmark Dataset
+
+The full experiment data is published on HuggingFace:
+
+- **Llama 3.2 1B / 3B, Llama 3.1 8B** — Alpaca + Medical domain, 4 methods (Baseline LoRA, DoRA, EgoRA e², EgoRA adaptive v2)
+- **Cross-modal** — Mistral-7B, Phi-3 Mini, LLaVA-7B, Qwen2-VL-7B
+- **Rotation geometry** — per-head θ, learning modes, knowledge maps, alignment landscapes
+- **Threshold analysis** — Rotation-Retention Law validation, dimensionality threshold, phase transition
+
+```python
+# Load with HuggingFace datasets
+from datasets import load_dataset
+ds = load_dataset("ArsSocratica/egora-benchmarks")
+```
 
 ## Citation
 
