@@ -5,6 +5,7 @@
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![Dataset on HF](https://img.shields.io/badge/🤗_Dataset-egora--benchmarks-yellow)](https://huggingface.co/datasets/ArsSocratica/egora-benchmarks)
 [![arXiv](https://img.shields.io/badge/arXiv-2602.05192-b31b1b.svg)](https://arxiv.org/abs/2602.05192)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19398709.svg)](https://doi.org/10.5281/zenodo.19398709)
 
 **EgoRA** is a dynamic, information-theoretic regularization method for fine-tuning neural networks. It uses the model's own output entropy to modulate an orthogonality penalty on LoRA adapter weights, preventing knowledge destruction and rank collapse during adaptation.
 
@@ -178,6 +179,7 @@ See the [`examples/`](https://github.com/ArsSocratica/EgoRA/tree/main/examples) 
 | 💻 **GitHub** | [ArsSocratica/EgoRA](https://github.com/ArsSocratica/EgoRA) |
 | 🤗 **Dataset** | [ArsSocratica/egora-benchmarks](https://huggingface.co/datasets/ArsSocratica/egora-benchmarks) — benchmark results, rotation geometry, training curves |
 | 📄 **Paper** | [arXiv:2602.05192](https://arxiv.org/abs/2602.05192) |
+| 🔖 **DOI** | [10.5281/zenodo.19398709](https://doi.org/10.5281/zenodo.19398709) |
 
 ### Benchmark Dataset
 
