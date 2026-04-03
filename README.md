@@ -186,7 +186,7 @@ See the [`examples/`](https://github.com/ArsSocratica/EgoRA/tree/main/examples) 
 The full experiment data is published on HuggingFace:
 
 - **Llama 3.2 1B / 3B, Llama 3.1 8B** — Alpaca + Medical domain, 4 methods (Baseline LoRA, DoRA, EgoRA e², EgoRA adaptive v2)
-- **Cross-modal** — Mistral-7B, Phi-3 Mini, LLaVA-7B, Qwen2-VL-7B
+- **Cross-modal** — Mistral-7B, Phi-3 Mini
 - **Rotation geometry** — per-head θ, learning modes, knowledge maps, alignment landscapes
 - **Threshold analysis** — Rotation-Retention Law validation, dimensionality threshold, phase transition
 
