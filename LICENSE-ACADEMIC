@@ -1,0 +1,110 @@
+# Additional Permission for Academic Use
+## (GNU AGPL v3, Section 7 Additional Permission)
+
+Copyright (C) 2026 Mark Dillerop / Ars Socratica
+
+This Additional Permission applies to the software packages `egora` and 
+`egora-diagnostics` (collectively, "the Software"), licensed under the 
+GNU Affero General Public License version 3 ("AGPL-3.0").
+
+---
+
+### 1. Grant of Additional Permission
+
+Pursuant to Section 7 of the AGPL-3.0, the licensor hereby grants the 
+following additional permission:
+
+If you use the Software solely for **Academic Use** as defined below, 
+you are granted an exception from the following AGPL-3.0 obligations:
+
+- Section 5 (Conveying Modified Source Versions): you are not required 
+  to license your modifications under the AGPL-3.0.
+- Section 13 (Remote Network Interaction): you are not required to make 
+  the complete Corresponding Source available to users who interact with 
+  your modified version over a network.
+
+All other terms of the AGPL-3.0 remain in full effect.
+
+---
+
+### 2. Definition of Academic Use
+
+**"Academic Use"** means use of the Software exclusively for:
+
+(a) non-commercial scientific research conducted at a university, 
+    research institute, or by an independent researcher;
+
+(b) preparation and publication of academic papers, theses, 
+    or dissertations;
+
+(c) teaching and educational purposes within an academic institution;
+
+(d) participation in academic competitions, benchmarks, or challenges 
+    where no monetary prize exceeds EUR 10,000.
+
+Academic Use explicitly **excludes**:
+
+(e) use within a product or service for which fees are charged, 
+    directly or indirectly;
+
+(f) use by a for-profit company, even if the specific use is 
+    internally designated as "research";
+
+(g) use to train, evaluate, or improve models that are subsequently 
+    deployed in a commercial product or service;
+
+(h) use to provide fine-tuning, certification, or compliance services 
+    to third parties for compensation.
+
+---
+
+### 3. Citation Requirement
+
+As a condition of this Additional Permission, any publication, 
+presentation, or public disclosure resulting from Academic Use must cite:
+
+> Dillerop, M. (2026). *The Rotation-Retention Law: Knowledge Loss Is 
+> Proportional to Representational Rotation in Fine-Tuned Language Models*. 
+> arXiv preprint [arXiv:XXXX.XXXXX].
+
+> U.S. Provisional Patent Application No. 64/024,742, filed April 1, 2026.
+
+---
+
+### 4. Patent Notice
+
+The Software implements methods covered by U.S. Provisional Patent 
+Application No. 64/024,742 ("Entropy-Governed Orthogonality Regularization 
+for Knowledge-Preserving Neural Network Adaptation and Rotation-Retention 
+Diagnostic Framework"), filed April 1, 2026, and any patents issuing 
+therefrom.
+
+This Additional Permission **does not** grant any patent license. 
+Academic Use of the Software as defined in Section 2 is permitted 
+without a separate patent license. Commercial use requires both a 
+software license and a patent license.
+
+For commercial licensing inquiries: mark@dillerop.com
+
+---
+
+### 5. No Warranty
+
+This Additional Permission is provided "as is" without warranty of 
+any kind. The licensor makes no representation that Academic Use as 
+defined herein is compliant with any applicable law or regulation 
+in any jurisdiction.
+
+---
+
+### 6. Termination
+
+This Additional Permission terminates automatically if you fail to 
+comply with its terms, including the Citation Requirement of Section 3. 
+Upon termination, the full terms of the AGPL-3.0 apply without exception.
+
+---
+
+*This document constitutes an Additional Permission under Section 7 of 
+the GNU Affero General Public License version 3, and is to be read 
+together with the AGPL-3.0 license text accompanying the Software.*

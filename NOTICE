@@ -1,0 +1,19 @@
+EgoRA: Entropy-Governed Orthogonality Regularization for Adaptation
+Copyright (C) 2026 Mark Dillerop / Ars Socratica
+
+This software is licensed under the GNU Affero General Public License
+version 3 (AGPL-3.0), with an Additional Permission for Academic Use
+pursuant to AGPL Section 7.
+
+License files:
+  LICENSE          — AGPL-3.0 + patent notice
+  LICENSE-ACADEMIC — Additional Permission for Academic Use
+
+PATENT NOTICE:
+The methods implemented in this software are covered by U.S. Provisional
+Patent Application No. 64/024,742, filed April 1, 2026, by Mark Dillerop.
+
+Academic use is permitted without a separate patent license.
+Commercial use requires both a software license and a patent license.
+
+Contact: mark@dillerop.com

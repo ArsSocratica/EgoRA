@@ -1,0 +1,46 @@
+                    GNU AFFERO GENERAL PUBLIC LICENSE
+                       Version 3, 19 November 2007
+
+ Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>
+ Everyone is permitted to copy and distribute verbatim copies
+ of this license document, but changing it is not allowed.
+
+The full text of the GNU Affero General Public License version 3 is
+available at: https://www.gnu.org/licenses/agpl-3.0.txt
+
+This software is licensed under the AGPL-3.0. The complete license text
+is incorporated by reference from the URL above.
+
+================================================================================
+                    ADDITIONAL PERMISSION FOR ACADEMIC USE
+================================================================================
+
+An Additional Permission for Academic Use (pursuant to AGPL-3.0 Section 7)
+is granted in the accompanying file LICENSE-ACADEMIC. Under this permission,
+academic researchers may use this software without the copyleft obligations
+of AGPL Sections 5 and 13, subject to a citation requirement.
+
+See LICENSE-ACADEMIC for the full terms of this Additional Permission.
+
+================================================================================
+                         PATENT NOTICE
+================================================================================
+
+The software implements methods covered by:
+
+  U.S. Provisional Patent Application No. 64/024,742
+  Title:    "Entropy-Governed Orthogonality Regularization for
+             Knowledge-Preserving Neural Network Adaptation and
+             Rotation-Retention Diagnostic Framework"
+  Inventor: Mark Dillerop
+  Filed:    April 1, 2026
+
+Academic Use (as defined in LICENSE-ACADEMIC) is permitted without a
+separate patent license. Commercial use requires both a software license
+and a patent license.
+
+For commercial licensing inquiries: mark@dillerop.com
+
+================================================================================
+
+Copyright (C) 2026 Mark Dillerop / Ars Socratica. All rights reserved.
