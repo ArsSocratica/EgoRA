@@ -270,6 +270,27 @@ def cmd_train(args):
         egora_alpha_cooldown=args.alpha_cooldown,
     )
 
+    # Detect best available device
+    has_cuda = torch.cuda.is_available()
+    has_mps = hasattr(torch.backends, 'mps') and torch.backends.mps.is_available()
+    use_fp32 = args.fp32
+
+    if has_cuda and not use_fp32:
+        mixed_precision = {"bf16": True}
+        model_dtype = torch.bfloat16
+        device_info = f"CUDA ({torch.cuda.get_device_name(0)})"
+    elif has_mps:
+        # MPS accelerates fp32 natively; fp16 causes NaN in softmax/log
+        mixed_precision = {}
+        model_dtype = torch.float32
+        device_info = "Apple MPS (Metal)"
+    else:
+        mixed_precision = {}
+        model_dtype = torch.float32
+        device_info = "CPU"
+
+    print(f"Device: {device_info}")
+
     train_args = EgoRATrainingArguments(
         output_dir=args.output_dir,
         num_train_epochs=args.epochs,
@@ -277,13 +298,13 @@ def cmd_train(args):
         learning_rate=args.lr,
         logging_steps=args.logging_steps,
         save_strategy="epoch" if args.save else "no",
-        bf16=torch.cuda.is_available() and not args.fp32,
         gradient_accumulation_steps=args.gradient_accumulation,
+        extra_args=mixed_precision,
     )
 
     model_kwargs = {}
-    if torch.cuda.is_available() and not args.fp32:
-        model_kwargs["torch_dtype"] = torch.bfloat16
+    if model_dtype != torch.float32:
+        model_kwargs["torch_dtype"] = model_dtype
 
     # Train
     trainer = EgoRATrainer(

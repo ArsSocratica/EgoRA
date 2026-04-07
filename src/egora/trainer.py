@@ -61,7 +61,8 @@ class EgoRATrainingArguments:
         logging_steps: Log every N steps.
         save_strategy: Checkpoint save strategy.
         eval_strategy: Evaluation strategy.
-        bf16: Use bf16 mixed precision.
+        bf16: Use bf16 mixed precision (CUDA). Auto-detected if None.
+        fp16: Use fp16 mixed precision (MPS/older GPUs). Auto-detected if None.
         gradient_accumulation_steps: Gradient accumulation steps.
         max_grad_norm: Maximum gradient norm for clipping.
         report_to: Reporting integrations (e.g., "wandb", "tensorboard").
@@ -78,11 +79,28 @@ class EgoRATrainingArguments:
     logging_steps: int = 10
     save_strategy: str = "epoch"
     eval_strategy: str = "no"
-    bf16: bool = False
+    bf16: Optional[bool] = None
+    fp16: Optional[bool] = None
     gradient_accumulation_steps: int = 1
     max_grad_norm: float = 1.0
     report_to: Optional[Union[str, List[str]]] = "none"
     extra_args: Optional[Dict[str, Any]] = None
+
+    def _resolve_bf16(self) -> bool:
+        """Resolve bf16 setting: explicit > auto-detect (CUDA only)."""
+        if self.bf16 is not None:
+            return self.bf16
+        return torch.cuda.is_available()
+
+    def _resolve_fp16(self) -> bool:
+        """Resolve fp16 setting: explicit > auto-detect.
+
+        Note: fp16 is NOT auto-enabled on MPS because it causes NaN in
+        softmax/log operations. MPS accelerates fp32 natively on Apple Silicon.
+        """
+        if self.fp16 is not None:
+            return self.fp16
+        return False
 
     def to_hf_args(self):
         """Convert to a ``transformers.TrainingArguments`` instance."""
@@ -104,8 +122,9 @@ class EgoRATrainingArguments:
             "lr_scheduler_type": self.lr_scheduler_type,
             "logging_steps": self.logging_steps,
             "save_strategy": self.save_strategy,
-            "evaluation_strategy": self.eval_strategy,
-            "bf16": self.bf16,
+            "eval_strategy": self.eval_strategy,
+            "bf16": self._resolve_bf16(),
+            "fp16": self._resolve_fp16(),
             "gradient_accumulation_steps": self.gradient_accumulation_steps,
             "max_grad_norm": self.max_grad_norm,
             "report_to": self.report_to,
@@ -226,8 +245,8 @@ class EgoRATrainer:
 
         # Auto-enable evaluation when adaptive alpha needs it
         if egora_config.egora_adaptive_alpha and eval_dataset is not None:
-            if self._hf_args.evaluation_strategy == "no":
-                self._hf_args.evaluation_strategy = "epoch"
+            if self._hf_args.eval_strategy == "no":
+                self._hf_args.eval_strategy = "epoch"
                 logger.info(
                     "Adaptive alpha enabled with eval_dataset: "
                     "auto-set eval_strategy='epoch'"

@@ -5,6 +5,17 @@ All notable changes to the `egora` package will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.3] — 2026-04-07
+
+### Added
+- **Apple MPS (Metal) GPU support**: Auto-detects Apple Silicon GPU. MPS uses fp32 (natively accelerated), CUDA uses bf16, CPU uses fp32 — all automatic.
+- **`EgoRATrainingArguments.fp16`**: New field for explicit fp16 control.
+- **CLI device detection**: `egora train` prints which device it uses (CUDA/MPS/CPU).
+
+### Fixed
+- **MPS NaN fix**: fp16 on MPS causes NaN in softmax/log operations. Now defaults to fp32 on MPS which is natively accelerated on Apple Silicon.
+- **`evaluation_strategy` → `eval_strategy`**: Fixed compatibility with transformers ≥4.46 which renamed this parameter.
+
 ## [0.5.1] — 2026-04-07
 
 ### Fixed
