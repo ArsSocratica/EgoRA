@@ -80,14 +80,26 @@ print(f"Damaged heads: {results['damaged_fraction']*100:.1f}%")
 
 ## Command-Line Interface
 
-EgoRA includes a CLI for quick diagnostics without writing Python code:
+EgoRA includes a CLI for training, diagnostics, and visualization — no Python code needed:
 
 ```bash
+# Fine-tune a model with EgoRA (one command!)
+egora train meta-llama/Llama-3.2-1B tatsu-lab/alpaca --epochs 1 --rank 16 --save
+
+# Fine-tune with all options
+egora train meta-llama/Llama-3.2-1B my-dataset \
+    --rank 16 --lora-alpha 32 --epochs 3 --batch-size 4 --lr 2e-4 \
+    --max-length 512 --max-samples 1000 --save --merge
+
 # Compare base vs fine-tuned model
 egora diagnose meta-llama/Llama-3.2-1B ./my-finetuned-model -o results.json --plot
 
 # Show model architecture info (layers, d_head, θ_crit, LoRA param estimates)
 egora info meta-llama/Llama-3.2-1B
+
+# Launch interactive web demo (requires: pip install gradio)
+egora demo
+egora demo --share  # public link
 
 # Version
 egora version

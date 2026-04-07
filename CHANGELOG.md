@@ -5,6 +5,12 @@ All notable changes to the `egora` package will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] — 2026-04-07
+
+### Added
+- **`egora train` CLI**: One-command fine-tuning with automatic dataset loading, tokenization, EgoRA training, post-training diagnostics, and optional model merging. Example: `egora train meta-llama/Llama-3.2-1B tatsu-lab/alpaca --epochs 1 --rank 16 --save`.
+- **`egora demo` CLI**: Interactive Gradio web dashboard for rotation diagnostics and model info. Launch with `egora demo` or `egora demo --share` for a public link. Requires `pip install gradio`.
+
 ## [0.4.0] — 2026-04-07
 
 ### Added
