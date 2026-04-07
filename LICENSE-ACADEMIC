@@ -64,8 +64,9 @@ As a condition of this Additional Permission, any publication,
 presentation, or public disclosure resulting from Academic Use must cite:
 
 > Dillerop, M. (2026). *The Rotation-Retention Law: Knowledge Loss Is 
-> Proportional to Representational Rotation in Fine-Tuned Language Models*. 
-> arXiv preprint [arXiv:XXXX.XXXXX].
+> Proportional to Representational Rotation in Fine-Tuned Language Models.
+> With EgoRA: Entropy-Governed Orthogonality Regularization for Adaptation*. 
+> Zenodo. https://doi.org/10.5281/zenodo.19410504
 
 > U.S. Provisional Patent Application No. 64/024,742, filed April 1, 2026.
 

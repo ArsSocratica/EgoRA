@@ -5,6 +5,19 @@ All notable changes to the `egora` package will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] — 2026-04-07
+
+### Fixed
+- **Removed all arXiv references**: arXiv ID was incorrect; all citations now use Zenodo DOI ([10.5281/zenodo.19410504](https://doi.org/10.5281/zenodo.19410504)).
+- **Zenodo DOI updated**: Corrected from `19398709` to `19410504` in all packages.
+
+## [0.3.0] — 2026-04-07
+
+### Fixed
+- **GitHub URLs**: All three packages (`egora`, `egora-diagnostics`, `egora-rrl`) now correctly point to `https://github.com/ArsSocratica/EgoRA`.
+- **LICENSE-ACADEMIC**: Citation requirement updated with correct Zenodo DOI in all packages.
+- **Sub-package READMEs**: Replaced placeholder text with full documentation including installation, usage examples, and correct AGPL-3.0 license info (was incorrectly listed as "Apache 2.0").
+
 ## [0.2.1] — 2026-04-03
 
 ### Fixed

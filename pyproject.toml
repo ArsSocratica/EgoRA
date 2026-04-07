@@ -65,7 +65,7 @@ Documentation = "https://github.com/ArsSocratica/EgoRA#readme"
 Repository = "https://github.com/ArsSocratica/EgoRA"
 Issues = "https://github.com/ArsSocratica/EgoRA/issues"
 Dataset = "https://huggingface.co/datasets/ArsSocratica/egora-benchmarks"
-DOI = "https://doi.org/10.5281/zenodo.19398709"
+DOI = "https://doi.org/10.5281/zenodo.19410504"
 
 [tool.hatch.version]
 path = "src/egora/_version.py"

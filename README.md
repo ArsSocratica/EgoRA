@@ -4,8 +4,7 @@
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![Dataset on HF](https://img.shields.io/badge/🤗_Dataset-egora--benchmarks-yellow)](https://huggingface.co/datasets/ArsSocratica/egora-benchmarks)
-[![arXiv](https://img.shields.io/badge/arXiv-2602.05192-b31b1b.svg)](https://arxiv.org/abs/2602.05192)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19398709.svg)](https://doi.org/10.5281/zenodo.19398709)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19410504.svg)](https://doi.org/10.5281/zenodo.19410504)
 
 **EgoRA** is a dynamic, information-theoretic regularization method for fine-tuning neural networks. It uses the model's own output entropy to modulate an orthogonality penalty on LoRA adapter weights, preventing knowledge destruction and rank collapse during adaptation.
 
@@ -178,8 +177,7 @@ See the [`examples/`](https://github.com/ArsSocratica/EgoRA/tree/main/examples) 
 | 📦 **PyPI** | [`pip install egora`](https://pypi.org/project/egora/) |
 | 💻 **GitHub** | [ArsSocratica/EgoRA](https://github.com/ArsSocratica/EgoRA) |
 | 🤗 **Dataset** | [ArsSocratica/egora-benchmarks](https://huggingface.co/datasets/ArsSocratica/egora-benchmarks) — benchmark results, rotation geometry, training curves |
-| 📄 **Paper** | [arXiv:2602.05192](https://arxiv.org/abs/2602.05192) |
-| 🔖 **DOI** | [10.5281/zenodo.19398709](https://doi.org/10.5281/zenodo.19398709) |
+| 🔖 **DOI** | [10.5281/zenodo.19410504](https://doi.org/10.5281/zenodo.19410504) |
 
 ### Benchmark Dataset
 
@@ -201,14 +199,15 @@ ds = load_dataset("ArsSocratica/egora-benchmarks")
 If you use EgoRA in your research, please cite:
 
 ```bibtex
-@article{dillerop2026rotation,
+@software{dillerop2026egora,
   title={The Rotation-Retention Law: Knowledge Loss Is Proportional to 
          Representational Rotation in Fine-Tuned Language Models.
          With EgoRA: Entropy-Governed Orthogonality Regularization 
          for Adaptation},
   author={Dillerop, Mark},
   year={2026},
-  note={Preprint}
+  doi={10.5281/zenodo.19410504},
+  url={https://zenodo.org/records/19410504}
 }
 ```
 
