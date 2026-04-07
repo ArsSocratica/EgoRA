@@ -70,6 +70,15 @@ from egora.geometry import (
 # ── PEFT Compatibility ───────────────────────────────────────────────────────
 from egora.peft_compat import EgoRAPeftModel, EgoRALoraConfig
 
+# ── Trainer Integration (lazy — requires transformers) ──────────────────────
+def __getattr__(name):
+    if name in ("EgoRATrainer", "EgoRATrainingArguments"):
+        from egora.trainer import EgoRATrainer, EgoRATrainingArguments
+        globals()["EgoRATrainer"] = EgoRATrainer
+        globals()["EgoRATrainingArguments"] = EgoRATrainingArguments
+        return globals()[name]
+    raise AttributeError(f"module 'egora' has no attribute {name!r}")
+
 __all__ = [
     # Version
     "__version__",
@@ -93,4 +102,7 @@ __all__ = [
     # PEFT Compatibility
     "EgoRAPeftModel",
     "EgoRALoraConfig",
+    # Trainer
+    "EgoRATrainer",
+    "EgoRATrainingArguments",
 ]

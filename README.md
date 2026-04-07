@@ -111,6 +111,37 @@ fig = plot_mode_distribution(results)    # preserved/additive/substitutive/damag
 fig = plot_projection_comparison(results) # Q vs K vs V vs O
 ```
 
+## HuggingFace Trainer Integration (Recommended)
+
+The easiest way to fine-tune with EgoRA — a drop-in replacement for `Trainer`:
+
+```python
+from egora import EgoRATrainer, EgoRATrainingArguments, EgoRALoraConfig
+
+config = EgoRALoraConfig(r=16, lora_alpha=32, use_egora=True)
+args = EgoRATrainingArguments(
+    output_dir="./output",
+    num_train_epochs=3,
+    per_device_train_batch_size=4,
+    learning_rate=2e-4,
+)
+
+trainer = EgoRATrainer(
+    model_name="meta-llama/Llama-3.2-1B",
+    egora_config=config,
+    args=args,
+    train_dataset=dataset,
+)
+trainer.train()
+
+# Post-training diagnostics
+report = trainer.diagnose()
+print(f"Mean rotation: {report['theta_bar_deg']:.2f}°")
+print(f"Damaged heads: {report['damaged_fraction']*100:.1f}%")
+```
+
+> **Try it now:** [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ArsSocratica/EgoRA/blob/main/notebooks/quickstart_colab.ipynb)
+
 ## PEFT-Compatible API
 
 For users familiar with HuggingFace PEFT, EgoRA provides a compatible wrapper:
