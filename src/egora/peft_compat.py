@@ -46,7 +46,16 @@ class EgoRALoraConfig:
         use_egora: Enable EgoRA entropy-governed penalty.
         egora_alpha: Entropy governor alpha (default: e/2).
         egora_lam_floor: Minimum lambda (default: ln(2)).
-        egora_adaptive_alpha: Enable adaptive alpha.
+        egora_adaptive_alpha: Enable adaptive alpha controller.
+        egora_alpha_min: Lower bound for adaptive alpha.
+        egora_alpha_max: Upper bound for adaptive alpha.
+        egora_alpha_gamma: Learning rate for alpha updates.
+        egora_gap_ema_beta: EMA decay for generalization gap smoothing.
+        egora_alpha_warmup: Eval steps before alpha adaptation begins.
+        egora_gap_spike_thresh: Relative gap change threshold for emergency boost.
+        egora_alpha_cooldown: Enable cooldown decay when gap stabilizes.
+        egora_alpha_cooldown_decay: Decay factor during cooldown.
+        egora_alpha_cooldown_patience: Consecutive stable evals before cooldown.
         adapter_type: One of 'egora', 'dora', 'rslora'.
         shadow_momentum: EMA momentum for shadow refresh.
         shadow_refresh_interval: Steps between shadow refreshes.
@@ -59,6 +68,15 @@ class EgoRALoraConfig:
     egora_alpha: float = 1.359
     egora_lam_floor: float = 0.6931
     egora_adaptive_alpha: bool = False
+    egora_alpha_min: float = 0.05
+    egora_alpha_max: float = 3.0
+    egora_alpha_gamma: float = 0.15
+    egora_gap_ema_beta: float = 0.7
+    egora_alpha_warmup: int = 2
+    egora_gap_spike_thresh: float = 0.5
+    egora_alpha_cooldown: bool = False
+    egora_alpha_cooldown_decay: float = 0.95
+    egora_alpha_cooldown_patience: int = 3
     adapter_type: str = "egora"
     shadow_momentum: float = 0.9
     shadow_refresh_interval: int = 100

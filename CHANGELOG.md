@@ -5,6 +5,14 @@ All notable changes to the `egora` package will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] — 2026-04-07
+
+### Fixed
+- **Adaptive alpha now actually works**: `update_alpha()` is called automatically after each evaluation via `on_evaluate` callback. Previously it was never triggered.
+- **All GovernorConfig parameters** (`alpha_min`, `alpha_max`, `alpha_gamma`, `gap_ema_beta`, `alpha_warmup`, `gap_spike_thresh`, `alpha_cooldown`, `alpha_cooldown_decay`, `alpha_cooldown_patience`) are now exposed in `EgoRALoraConfig` and `egora train` CLI.
+- **Auto-enable eval_strategy**: When `adaptive_alpha=True` and `eval_dataset` is provided, evaluation strategy is automatically set to `"epoch"` if it was `"no"`.
+- **CLI flags**: Added `--egora-alpha`, `--egora-lam-floor`, `--adaptive-alpha`, `--alpha-min`, `--alpha-max`, `--alpha-gamma`, `--alpha-cooldown` to `egora train`.
+
 ## [0.5.0] — 2026-04-07
 
 ### Added

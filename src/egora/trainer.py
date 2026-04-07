@@ -208,15 +208,34 @@ class EgoRATrainer:
             adapter_type=egora_config.adapter_type,
         )
 
-        # Governor
+        # Governor — pass all config parameters
         self._governor = EntropyGovernor(GovernorConfig(
             alpha=egora_config.egora_alpha,
             lam_floor=egora_config.egora_lam_floor,
             adaptive_alpha=egora_config.egora_adaptive_alpha,
+            alpha_min=egora_config.egora_alpha_min,
+            alpha_max=egora_config.egora_alpha_max,
+            alpha_gamma=egora_config.egora_alpha_gamma,
+            gap_ema_beta=egora_config.egora_gap_ema_beta,
+            alpha_warmup=egora_config.egora_alpha_warmup,
+            gap_spike_thresh=egora_config.egora_gap_spike_thresh,
+            alpha_cooldown=egora_config.egora_alpha_cooldown,
+            alpha_cooldown_decay=egora_config.egora_alpha_cooldown_decay,
+            alpha_cooldown_patience=egora_config.egora_alpha_cooldown_patience,
         ))
 
-        # Step counter for shadow refresh
+        # Auto-enable evaluation when adaptive alpha needs it
+        if egora_config.egora_adaptive_alpha and eval_dataset is not None:
+            if self._hf_args.evaluation_strategy == "no":
+                self._hf_args.evaluation_strategy = "epoch"
+                logger.info(
+                    "Adaptive alpha enabled with eval_dataset: "
+                    "auto-set eval_strategy='epoch'"
+                )
+
+        # Step counter and loss tracking for shadow refresh + adaptive alpha
         self._step_count = 0
+        self._last_train_loss: Optional[float] = None
         shadow_interval = egora_config.shadow_refresh_interval
 
         # Capture references for the closure
@@ -234,6 +253,9 @@ class EgoRATrainer:
                 penalty = get_total_egora_penalty(lora_modules)
                 total_loss = task_loss + lam * penalty
 
+                # Track for adaptive alpha
+                trainer_self._last_train_loss = task_loss.item()
+
                 trainer_self._step_count += 1
                 if (shadow_interval > 0
                         and trainer_self._step_count % shadow_interval == 0):
@@ -243,7 +265,7 @@ class EgoRATrainer:
                     return total_loss, outputs
                 return total_loss
 
-        # Shadow refresh callback (also logs penalty)
+        # EgoRA callback: logging + adaptive alpha after evaluation
         class _EgoRACallback(TrainerCallback):
             def on_log(self, _args, state, control, logs=None, **kwargs):
                 if logs is not None:
@@ -251,7 +273,28 @@ class EgoRATrainer:
                         penalty_val = get_total_egora_penalty(lora_modules).item()
                     logs["egora_penalty"] = penalty_val
                     logs["egora_lambda"] = governor.alpha
+                    logs["egora_alpha"] = governor.alpha
                     logs["egora_step"] = trainer_self._step_count
+
+            def on_evaluate(self, _args, state, control, metrics=None, **kwargs):
+                """After each evaluation, update adaptive alpha using the
+                generalization gap (val_loss - train_loss)."""
+                if not governor.config.adaptive_alpha:
+                    return
+                if metrics is None:
+                    return
+                val_loss = metrics.get("eval_loss")
+                train_loss = trainer_self._last_train_loss
+                if val_loss is None or train_loss is None:
+                    return
+                old_alpha = governor.alpha
+                new_alpha = governor.update_alpha(train_loss, val_loss)
+                gap = val_loss - train_loss
+                logger.info(
+                    f"Adaptive alpha update: "
+                    f"train_loss={train_loss:.4f}, val_loss={val_loss:.4f}, "
+                    f"gap={gap:.4f}, alpha: {old_alpha:.4f} → {new_alpha:.4f}"
+                )
 
         _callbacks = [_EgoRACallback()]
         if callbacks:

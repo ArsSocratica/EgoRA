@@ -261,6 +261,13 @@ def cmd_train(args):
         adapter_type=args.adapter_type,
         lora_dropout=args.lora_dropout,
         shadow_refresh_interval=args.shadow_refresh,
+        egora_alpha=args.egora_alpha,
+        egora_lam_floor=args.egora_lam_floor,
+        egora_adaptive_alpha=args.adaptive_alpha,
+        egora_alpha_min=args.alpha_min,
+        egora_alpha_max=args.alpha_max,
+        egora_alpha_gamma=args.alpha_gamma,
+        egora_alpha_cooldown=args.alpha_cooldown,
     )
 
     train_args = EgoRATrainingArguments(
@@ -604,6 +611,15 @@ def main():
     p_train.add_argument("--save", action="store_true", help="Save adapter checkpoints")
     p_train.add_argument("--merge", action="store_true", help="Merge adapters and save full model")
     p_train.add_argument("--skip-diagnose", action="store_true", help="Skip post-training diagnostics")
+    # Entropy governor parameters
+    p_train.add_argument("--egora-alpha", type=float, default=1.359, help="Entropy governor alpha coefficient (default: e/2 ≈ 1.359)")
+    p_train.add_argument("--egora-lam-floor", type=float, default=0.6931, help="Minimum lambda floor (default: ln(2) ≈ 0.6931)")
+    # Adaptive alpha parameters
+    p_train.add_argument("--adaptive-alpha", action="store_true", help="Enable adaptive alpha (adjusts penalty based on generalization gap)")
+    p_train.add_argument("--alpha-min", type=float, default=0.05, help="Minimum adaptive alpha (default: 0.05)")
+    p_train.add_argument("--alpha-max", type=float, default=3.0, help="Maximum adaptive alpha (default: 3.0)")
+    p_train.add_argument("--alpha-gamma", type=float, default=0.15, help="Adaptive alpha learning rate (default: 0.15)")
+    p_train.add_argument("--alpha-cooldown", action="store_true", help="Enable alpha cooldown when gap stabilizes")
     p_train.set_defaults(func=cmd_train)
 
     # ── diagnose ─────────────────────────────────────────────────────────────
