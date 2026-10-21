@@ -1,12 +1,13 @@
 """Unit tests for the geometry / diagnostics module."""
 
-import torch
-import torch.nn as nn
+import json
+import os
+import tempfile
+
 import numpy as np
 import pytest
-import os
-import json
-import tempfile
+import torch
+import torch.nn as nn
 
 from egora.geometry import compute_head_geometry, compute_interhead_diversity, save_geometry
 

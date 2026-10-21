@@ -2,7 +2,6 @@
 
 import torch
 import torch.nn as nn
-import pytest
 
 
 def test_egora_lora_forward():
@@ -138,7 +137,7 @@ def test_refresh_shadows():
 
 def test_merge_unmerge():
     """merge_lora and unmerge_lora roundtrip."""
-    from egora.adapters import apply_lora, merge_lora, unmerge_lora, EgoRALoRALinear
+    from egora.adapters import EgoRALoRALinear, apply_lora, merge_lora, unmerge_lora
 
     class TinyModel(nn.Module):
         def __init__(self):

@@ -1,7 +1,9 @@
 """Unit tests for the CLI module."""
 
-import pytest
 from unittest.mock import patch
+
+import pytest
+
 from egora.cli import main
 
 
