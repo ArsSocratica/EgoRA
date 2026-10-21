@@ -58,6 +58,7 @@ def test_detect_peft_adapter(tmp_path):
 
 
 def test_demo_tables(tiny_model):
+    pytest.importorskip("pandas")
     from egora.demo import format_report_markdown, layer_table, top_units_table
 
     tuned = copy.deepcopy(tiny_model)
