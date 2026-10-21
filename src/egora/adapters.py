@@ -117,7 +117,10 @@ class EgoRALoRALinear(nn.Module):
         with torch.no_grad():
             W_eff = self.lora_B @ self.lora_A
             new_shadow = self._compute_shadow(W_eff)
-            if momentum > 0:
+            # The shadow starts at pinv(0) = 0; averaging into it would leave the
+            # shadow at a fraction of pinv(W) and make the penalty inflate the
+            # adapter until the EMA catches up. Seed it directly the first time.
+            if momentum > 0 and bool(self.W_shadow.any()):
                 self.W_shadow.copy_(momentum * self.W_shadow + (1 - momentum) * new_shadow)
             else:
                 self.W_shadow.copy_(new_shadow)

@@ -164,3 +164,25 @@ def test_merge_unmerge():
 
     # After unmerge: q_proj is an adapter again
     assert isinstance(model.q_proj, EgoRALoRALinear)
+
+
+def test_first_shadow_refresh_ignores_momentum():
+    """The first refresh seeds the zero shadow with pinv(W) instead of averaging."""
+    import torch.nn as nn
+    from egora.adapters import EgoRALoRALinear
+
+    torch.manual_seed(0)
+    m = EgoRALoRALinear(nn.Linear(32, 32), rank=4, use_egora=True)
+    assert not m.W_shadow.any()
+    with torch.no_grad():
+        m.lora_B.normal_(0, 1e-2)
+    expected = torch.linalg.pinv(m.lora_B @ m.lora_A).t()
+    m.refresh_shadow(momentum=0.9)
+    assert torch.allclose(m.W_shadow, expected, atol=1e-5)
+    # At the seeded shadow the penalty sits at its floor sqrt(n - r).
+    assert abs(m.get_raw_symmetry_loss().item() - (32 - 4) ** 0.5) < 1e-3
+    # Later refreshes still use the EMA.
+    with torch.no_grad():
+        m.lora_B.mul_(2.0)
+    m.refresh_shadow(momentum=0.9)
+    assert torch.allclose(m.W_shadow, 0.9 * expected + 0.1 * expected / 2, atol=1e-5)
