@@ -5,6 +5,11 @@ All notable changes to the `egora` package will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **Shadow warm-up made EgoRA inflate the adapter.** `W_shadow` starts at `pinv(0) = 0` and refreshes used an EMA (`momentum=0.9` by default), so after the first refresh the shadow was only 10% of `pinv(W)`. Until the EMA caught up (~20–30 refreshes, i.e. 2,000–3,000 steps at the default interval of 100) the penalty pushed the adapter to *grow*, increasing rotation and forgetting relative to plain LoRA. The first refresh of a zero shadow now copies `pinv(W)` directly; later refreshes still use the EMA.
+
 ## [0.5.3] — 2026-04-07
 
 ### Added
