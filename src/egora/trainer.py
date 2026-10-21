@@ -33,7 +33,7 @@ Requires ``transformers>=4.30`` (imported lazily).
 
 import logging
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Union
 
 import torch
@@ -180,9 +180,10 @@ class EgoRATrainer:
                 "Install with: pip install 'transformers>=4.30'"
             )
 
-        from egora.peft_compat import EgoRALoraConfig
+        from egora._compat import normalize_model_kwargs, trainer_tokenizer_kwargs
         from egora.adapters import apply_lora, get_total_egora_penalty, refresh_all_shadows
         from egora.governor import EntropyGovernor, GovernorConfig
+        from egora.peft_compat import EgoRALoraConfig
 
         # Defaults
         if egora_config is None:
@@ -200,7 +201,7 @@ class EgoRATrainer:
         else:
             if model_name is None:
                 raise ValueError("Either model_name or model must be provided.")
-            _mkwargs = model_kwargs or {}
+            _mkwargs = normalize_model_kwargs(model_kwargs or {})
             self.model = AutoModelForCausalLM.from_pretrained(model_name, **_mkwargs)
 
         # Store base state for diagnostics
@@ -325,8 +326,8 @@ class EgoRATrainer:
             args=self._hf_args,
             train_dataset=train_dataset,
             eval_dataset=eval_dataset,
-            tokenizer=tokenizer,
             data_collator=data_collator,
+            **trainer_tokenizer_kwargs(Trainer, tokenizer),
             callbacks=_callbacks,
         )
 
@@ -390,10 +391,10 @@ class EgoRATrainer:
             Geometry results dict with keys like ``theta_bar_deg``,
             ``damaged_fraction``, ``per_head``, etc.
         """
-        from egora.geometry import compute_head_geometry
-
         # Build a lightweight base reference from stored state
         import copy
+
+        from egora.geometry import compute_head_geometry
         base_model = copy.deepcopy(self.model)
 
         # Merge adapters in the current model first

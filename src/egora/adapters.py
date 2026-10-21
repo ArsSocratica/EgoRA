@@ -24,6 +24,7 @@ Usage::
 """
 
 import math
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -102,11 +103,11 @@ class EgoRALoRALinear(nn.Module):
         W_eff = self.lora_B @ self.lora_A  # (out, in)
         if self.out_features <= self.in_features:
             P = W_eff @ self.W_shadow.t()  # (out, out)
-            I = torch.eye(self.out_features, device=W_eff.device)
+            eye = torch.eye(self.out_features, device=W_eff.device)
         else:
             P = self.W_shadow.t() @ W_eff  # (in, in)
-            I = torch.eye(self.in_features, device=W_eff.device)
-        diff = P - I
+            eye = torch.eye(self.in_features, device=W_eff.device)
+        diff = P - eye
         fro_sq = (diff * diff).sum()
         return torch.sqrt(fro_sq + 1e-8)
 
@@ -306,6 +307,17 @@ def refresh_all_shadows(lora_modules, momentum=0.0):
         m.refresh_shadow(momentum)
 
 
+def effective_weight(m):
+    """Return the adapted weight of an adapter module (float32, not merged)."""
+    W = m.base_linear.weight.float()
+    delta = m.scaling * (m.lora_B @ m.lora_A)
+    if isinstance(m, DoRALinear):
+        W_adapted = W + delta
+        col_norms = W_adapted.norm(dim=0, keepdim=True).clamp(min=1e-8)
+        return m.magnitude.unsqueeze(0) * (W_adapted / col_norms)
+    return W + delta
+
+
 def merge_lora(model, lora_modules):
     """Merge LoRA weights into base model weights (in-place).
 
@@ -324,16 +336,8 @@ def merge_lora(model, lora_modules):
     replacements = []
     with torch.no_grad():
         for m in lora_modules:
-            if isinstance(m, DoRALinear):
-                W = m.base_linear.weight.float()
-                delta = m.scaling * (m.lora_B @ m.lora_A)
-                W_adapted = W + delta
-                col_norms = W_adapted.norm(dim=0, keepdim=True).clamp(min=1e-8)
-                W_merged = m.magnitude.unsqueeze(0) * (W_adapted / col_norms)
-                m.base_linear.weight.data.copy_(W_merged.to(m.base_linear.weight.dtype))
-            else:
-                delta = m.scaling * (m.lora_B @ m.lora_A)
-                m.base_linear.weight.data += delta.to(m.base_linear.weight.dtype)
+            W_merged = effective_weight(m)
+            m.base_linear.weight.data.copy_(W_merged.to(m.base_linear.weight.dtype))
 
     for name, parent_module in model.named_modules():
         for attr_name, child in list(parent_module._modules.items()):

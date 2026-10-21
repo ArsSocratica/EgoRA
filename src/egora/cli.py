@@ -5,55 +5,64 @@ Provides ``egora`` CLI commands for diagnostics and quick experimentation.
 
 Commands:
   egora train MODEL DATASET                — Fine-tune a model with EgoRA
-  egora diagnose BASE_MODEL TUNED_MODEL    — Compute rotation geometry
+  egora diagnose BASE_MODEL TUNED_MODEL    — Compute rotation geometry (TUNED may be an adapter)
   egora info MODEL                         — Show model architecture summary
   egora demo                               — Launch Gradio web demo
   egora version                            — Print version
 """
 
 import argparse
-import json
-import sys
 import os
-from typing import Optional
+import sys
 
 
-def _load_model(path_or_name: str):
-    """Load a HuggingFace model from path or Hub name."""
+def _require_transformers():
     try:
-        from transformers import AutoModelForCausalLM
+        import transformers  # noqa: F401
     except ImportError:
         print("Error: `transformers` is required for model loading.")
         print("Install with: pip install transformers")
         sys.exit(1)
 
-    import torch
+
+def _load_model(path_or_name: str, trust_remote_code: bool = True):
+    """Load a HuggingFace model from path or Hub name (stored dtype, CPU)."""
+    _require_transformers()
+    from egora.loading import load_causal_lm
 
     print(f"Loading model: {path_or_name} ...")
-    model = AutoModelForCausalLM.from_pretrained(
-        path_or_name,
-        torch_dtype=torch.float32,
-        device_map="cpu",
-        trust_remote_code=True,
-    )
-    model.eval()
-    return model
+    return load_causal_lm(path_or_name, trust_remote_code=trust_remote_code)
 
 
 def cmd_diagnose(args):
     """Run rotation geometry diagnostics between base and tuned model."""
     from egora.geometry import compute_head_geometry, compute_interhead_diversity, save_geometry
+    from egora.loading import load_tuned_model
+    from egora.model_info import get_attention_dims, theta_crit_deg
 
     base_model = _load_model(args.base_model)
-    tuned_model = _load_model(args.tuned_model)
+    print(f"Loading fine-tuned model: {args.tuned_model} ...")
+    tuned_model, kind = load_tuned_model(
+        base_model, args.tuned_model, trust_remote_code=True
+    )
+    if kind != "model":
+        print(f"  Detected {kind.replace('_', ' ')}: merged into a copy of the base model")
 
     target_modules = args.target_modules.split(",") if args.target_modules else None
 
-    print("Computing head geometry ...")
+    head_dim = args.head_dim or get_attention_dims(base_model)["head_dim"]
+    model_crit = theta_crit_deg(head_dim) if head_dim else None
+    verdict_crit = 5.0 if args.fixed_threshold or model_crit is None else model_crit
+    damage_threshold = args.damage_threshold if args.damage_threshold is not None else verdict_crit
+
+    print(f"Computing {args.granularity}-level geometry ...")
     results = compute_head_geometry(
         base_model, tuned_model,
         target_modules=target_modules,
-        damage_threshold_deg=args.damage_threshold,
+        damage_threshold_deg=damage_threshold,
+        granularity=args.granularity,
+        head_dim=head_dim,
+        verdict_theta_crit=verdict_crit,
     )
 
     if "error" in results:
@@ -65,7 +74,11 @@ def cmd_diagnose(args):
     print("=" * 60)
     print("  EgoRA Rotation Geometry Report")
     print("=" * 60)
-    print(f"  Heads analyzed:       {results['n_heads']}")
+    unit = "Heads" if results["granularity"] == "head" else "Projections"
+    print(f"  {unit + ' analyzed:':22s}{results['n_heads']}")
+    if results.get("theta_crit_deg"):
+        print(f"  d_head / θ_crit:      {results['head_dim']} / {results['theta_crit_deg']:.2f}°")
+    print(f"  Damage threshold:     {results['damage_threshold_deg']:.2f}°")
     print(f"  Mean rotation (θ̄):    {results['theta_bar_deg']:.2f}°")
     print(f"  Std rotation:         {results['theta_std_deg']:.2f}°")
     print(f"  Min / Max:            {results['theta_min_deg']:.2f}° / {results['theta_max_deg']:.2f}°")
@@ -78,13 +91,7 @@ def cmd_diagnose(args):
     print()
 
     # Rotation-Retention Law prediction
-    theta_bar = results['theta_bar_deg']
-    if theta_bar < 3.0:
-        verdict = "✅ SAFE — Knowledge well preserved (θ̄ < 3°)"
-    elif theta_bar < 5.0:
-        verdict = "⚠️  WARNING — Moderate rotation, check benchmarks (3° < θ̄ < 5°)"
-    else:
-        verdict = "❌ DANGER — Significant knowledge loss expected (θ̄ > 5°)"
+    verdict = results["verdict"]["message"]
     print(f"  Verdict: {verdict}")
     print()
 
@@ -144,56 +151,38 @@ def cmd_diagnose(args):
 
 def cmd_info(args):
     """Show model architecture summary relevant to EgoRA."""
-    model = _load_model(args.model)
+    _require_transformers()
+    from egora.model_info import load_model_skeleton, summarize_model
 
-    target_modules = args.target_modules.split(",") if args.target_modules else \
-        ['q_proj', 'k_proj', 'v_proj', 'o_proj']
-
-    total_params = sum(p.numel() for p in model.parameters())
-    target_params = 0
-    target_count = 0
+    target_modules = args.target_modules.split(",") if args.target_modules else None
+    try:
+        model = load_model_skeleton(args.model, trust_remote_code=True)
+    except Exception:
+        model = _load_model(args.model)
+    info = summarize_model(model, target_modules=target_modules)
 
     print()
     print("=" * 60)
     print("  EgoRA Model Info")
     print("=" * 60)
     print(f"  Model:          {args.model}")
-    print(f"  Total params:   {total_params:,}")
+    print(f"  Total params:   {info['total_params']:,}")
+    print()
+    print(f"  Target modules: {', '.join(info['target_modules'])}")
+    print(f"  Target layers:  {info['num_layers']}")
+    pct = info["target_params"] / info["total_params"] * 100 if info["total_params"] else 0
+    print(f"  Target params:  {info['target_params']:,} ({pct:.1f}%)")
+    print(f"  Projections:    {info['target_count']}")
+    if info["num_attention_heads"]:
+        print(f"  Heads (Q / KV): {info['num_attention_heads']} / {info['num_key_value_heads']}")
+    if info["head_dim"]:
+        print(f"  d_head:         {info['head_dim']}")
+        print(f"  θ_crit:         {info['theta_crit_deg']:.2f}° (arcsin(1/√d_head))")
     print()
 
-    layers_found = set()
-    for name, param in model.named_parameters():
-        for tm in target_modules:
-            if (f".{tm}." in name or name.endswith(f".{tm}.weight")) and name.endswith('.weight'):
-                target_params += param.numel()
-                target_count += 1
-                for part in name.split('.'):
-                    if part.isdigit():
-                        layers_found.add(int(part))
-                        break
-
-    d_head = None
-    for name, param in model.named_parameters():
-        if 'q_proj.weight' in name:
-            d_head = param.shape[0]  # out_features
-            break
-
-    print(f"  Target modules: {', '.join(target_modules)}")
-    print(f"  Target layers:  {len(layers_found)} ({min(layers_found) if layers_found else '?'}-{max(layers_found) if layers_found else '?'})")
-    print(f"  Target params:  {target_params:,} ({target_params/total_params*100:.1f}%)")
-    print(f"  Projections:    {target_count}")
-    if d_head:
-        import math
-        theta_crit = math.degrees(math.asin(1.0 / math.sqrt(d_head)))
-        print(f"  d_head:         {d_head}")
-        print(f"  θ_crit:         {theta_crit:.2f}° (arcsin(1/√d_head))")
-    print()
-
-    # LoRA parameter estimate
-    for rank in [8, 16, 32, 64]:
-        lora_params = target_count * (d_head * rank + rank * d_head) if d_head else 0
-        pct = lora_params / total_params * 100 if total_params else 0
-        print(f"  LoRA rank={rank:2d}: {lora_params:>12,} trainable params ({pct:.2f}%)")
+    for rank, est in info["lora_estimates"].items():
+        print(f"  LoRA rank={rank:2d}: {est['params']:>12,} trainable params "
+              f"({est['percent']:.2f}%)")
 
     print()
     print("=" * 60)
@@ -202,16 +191,17 @@ def cmd_info(args):
 def cmd_train(args):
     """Fine-tune a model with EgoRA in one command."""
     try:
-        from transformers import AutoTokenizer
         from datasets import load_dataset
+        from transformers import AutoTokenizer
     except ImportError:
         print("Error: `transformers` and `datasets` are required for training.")
         print("Install with: pip install transformers datasets accelerate")
         sys.exit(1)
 
     import torch
-    from egora.trainer import EgoRATrainer, EgoRATrainingArguments
+
     from egora.peft_compat import EgoRALoraConfig
+    from egora.trainer import EgoRATrainer, EgoRATrainingArguments
 
     # Load tokenizer
     print(f"Loading tokenizer: {args.model} ...")
@@ -330,14 +320,8 @@ def cmd_train(args):
         try:
             report = trainer.diagnose()
             print(f"  Mean rotation:   {report['theta_bar_deg']:.2f}°")
-            print(f"  Damaged heads:   {report['damaged_fraction']*100:.1f}%")
-            theta_bar = report['theta_bar_deg']
-            if theta_bar < 3.0:
-                print("  Verdict: ✅ SAFE — Knowledge well preserved")
-            elif theta_bar < 5.0:
-                print("  Verdict: ⚠️  WARNING — Moderate rotation")
-            else:
-                print("  Verdict: ❌ DANGER — Significant knowledge loss expected")
+            print(f"  Damaged projections: {report['damaged_fraction']*100:.1f}%")
+            print(f"  Verdict: {report['verdict']['message']}")
         except Exception as e:
             print(f"  Diagnostics failed: {e}")
 
@@ -361,239 +345,18 @@ def cmd_train(args):
 def cmd_demo(args):
     """Launch Gradio web demo for EgoRA diagnostics."""
     try:
-        import gradio as gr
+        import gradio  # noqa: F401
     except ImportError:
         print("Error: gradio is required for the demo.")
         print("Install with: pip install gradio")
         sys.exit(1)
 
     from egora._version import __version__
+    from egora.demo import build_demo, launch_demo
 
-    def run_diagnostics(base_model_name, tuned_model_name, damage_threshold):
-        """Run rotation diagnostics and return results."""
-        if not base_model_name or not tuned_model_name:
-            return "Please provide both model names.", None, None
-
-        try:
-            import torch
-            from transformers import AutoModelForCausalLM
-            from egora.geometry import compute_head_geometry
-
-            yield "Loading base model...", None, None
-
-            base = AutoModelForCausalLM.from_pretrained(
-                base_model_name, torch_dtype=torch.float32,
-                device_map="cpu", trust_remote_code=True
-            )
-
-            yield "Loading tuned model...", None, None
-
-            tuned = AutoModelForCausalLM.from_pretrained(
-                tuned_model_name, torch_dtype=torch.float32,
-                device_map="cpu", trust_remote_code=True
-            )
-
-            yield "Computing rotation geometry...", None, None
-
-            results = compute_head_geometry(
-                base, tuned, damage_threshold_deg=damage_threshold
-            )
-
-            # Format text summary
-            theta_bar = results['theta_bar_deg']
-            if theta_bar < 3.0:
-                verdict = "✅ SAFE — Knowledge well preserved (θ̄ < 3°)"
-            elif theta_bar < 5.0:
-                verdict = "⚠️ WARNING — Moderate rotation (3° < θ̄ < 5°)"
-            else:
-                verdict = "❌ DANGER — Significant knowledge loss expected (θ̄ > 5°)"
-
-            summary = f"""## Rotation Geometry Report
-
-| Metric | Value |
-|--------|-------|
-| Heads analyzed | {results['n_heads']} |
-| Mean rotation (θ̄) | {results['theta_bar_deg']:.2f}° |
-| Std rotation | {results['theta_std_deg']:.2f}° |
-| Min / Max | {results['theta_min_deg']:.2f}° / {results['theta_max_deg']:.2f}° |
-
-### Learning Modes
-"""
-            for mode, count in results['mode_counts'].items():
-                frac = results['mode_fractions'][mode]
-                bar = "█" * int(frac * 20)
-                summary += f"- **{mode}**: {count} ({frac*100:.1f}%) {bar}\n"
-
-            summary += f"\n### Verdict\n{verdict}"
-
-            # Generate plot
-            plot_fig = None
-            try:
-                from egora.plotting import plot_rotation_report
-                plot_fig = plot_rotation_report(results)
-            except ImportError:
-                pass
-
-            yield summary, plot_fig, json.dumps(results, indent=2, default=str)
-
-        except Exception as e:
-            yield f"Error: {e}", None, None
-
-    def run_model_info(model_name):
-        """Get model info for EgoRA."""
-        if not model_name:
-            return "Please provide a model name."
-
-        try:
-            import torch
-            import math
-            from transformers import AutoModelForCausalLM
-
-            model = AutoModelForCausalLM.from_pretrained(
-                model_name, torch_dtype=torch.float32,
-                device_map="cpu", trust_remote_code=True
-            )
-            total_params = sum(p.numel() for p in model.parameters())
-            target_modules = ['q_proj', 'k_proj', 'v_proj', 'o_proj']
-            target_count = 0
-            target_params = 0
-            layers_found = set()
-
-            for name, param in model.named_parameters():
-                for tm in target_modules:
-                    if (f".{tm}." in name or name.endswith(f".{tm}.weight")) and name.endswith('.weight'):
-                        target_params += param.numel()
-                        target_count += 1
-                        for part in name.split('.'):
-                            if part.isdigit():
-                                layers_found.add(int(part))
-                                break
-
-            d_head = None
-            for name, param in model.named_parameters():
-                if 'q_proj.weight' in name:
-                    d_head = param.shape[0]
-                    break
-
-            info = f"""## Model Info: {model_name}
-
-| Property | Value |
-|----------|-------|
-| Total params | {total_params:,} |
-| Target projections | {target_count} |
-| Target params | {target_params:,} ({target_params/total_params*100:.1f}%) |
-| Layers | {len(layers_found)} |
-"""
-            if d_head:
-                theta_crit = math.degrees(math.asin(1.0 / math.sqrt(d_head)))
-                info += f"| d_head | {d_head} |\n"
-                info += f"| θ_crit | {theta_crit:.2f}° |\n"
-                info += "\n### LoRA Parameter Estimates\n\n"
-                info += "| Rank | Trainable Params | % of Total |\n"
-                info += "|------|-----------------|------------|\n"
-                for rank in [8, 16, 32, 64]:
-                    lora_p = target_count * (d_head * rank + rank * d_head)
-                    pct = lora_p / total_params * 100
-                    info += f"| {rank} | {lora_p:,} | {pct:.2f}% |\n"
-
-            del model
-            return info
-
-        except Exception as e:
-            return f"Error: {e}"
-
-    # Build Gradio interface
-    with gr.Blocks(
-        title=f"EgoRA v{__version__} — Rotation Diagnostics",
-        theme=gr.themes.Soft(),
-    ) as demo:
-        gr.Markdown(f"""
-# 🧠 EgoRA — Rotation Diagnostics Dashboard
-**v{__version__}** | [GitHub](https://github.com/ArsSocratica/EgoRA) | [PyPI](https://pypi.org/project/egora/) | [DOI](https://doi.org/10.5281/zenodo.19410504)
-
-Fine-tune without forgetting. Visualize how much your model's internal representations rotated during training.
-        """)
-
-        with gr.Tabs():
-            with gr.Tab("🔍 Diagnose"):
-                gr.Markdown("Compare a base model with a fine-tuned version to measure representational rotation.")
-                with gr.Row():
-                    with gr.Column():
-                        base_input = gr.Textbox(
-                            label="Base Model",
-                            placeholder="meta-llama/Llama-3.2-1B",
-                            value="meta-llama/Llama-3.2-1B",
-                        )
-                        tuned_input = gr.Textbox(
-                            label="Fine-Tuned Model",
-                            placeholder="path/to/your/finetuned-model",
-                        )
-                        threshold_slider = gr.Slider(
-                            minimum=1.0, maximum=15.0, value=5.0, step=0.5,
-                            label="Damage Threshold (degrees)",
-                        )
-                        diagnose_btn = gr.Button("🔬 Run Diagnostics", variant="primary")
-                    with gr.Column():
-                        summary_output = gr.Markdown(label="Summary")
-                        plot_output = gr.Plot(label="Rotation Report")
-                        json_output = gr.Code(label="Raw JSON", language="json")
-
-                diagnose_btn.click(
-                    fn=run_diagnostics,
-                    inputs=[base_input, tuned_input, threshold_slider],
-                    outputs=[summary_output, plot_output, json_output],
-                )
-
-            with gr.Tab("ℹ️ Model Info"):
-                gr.Markdown("Get model architecture info relevant to EgoRA (layers, d_head, θ_crit, LoRA estimates).")
-                info_input = gr.Textbox(
-                    label="Model Name",
-                    placeholder="meta-llama/Llama-3.2-1B",
-                )
-                info_btn = gr.Button("📊 Get Info", variant="primary")
-                info_output = gr.Markdown(label="Model Info")
-
-                info_btn.click(
-                    fn=run_model_info,
-                    inputs=[info_input],
-                    outputs=[info_output],
-                )
-
-            with gr.Tab("📖 About"):
-                gr.Markdown(f"""
-## About EgoRA
-
-**EgoRA** (Entropy-Governed Orthogonality Regularization for Adaptation) is a dynamic
-regularization method for fine-tuning neural networks.
-
-The **Rotation-Retention Law**: knowledge loss in fine-tuned language models is
-proportional to representational rotation (ΔM ∝ θ̄).
-
-### Quick Start
-
-```bash
-pip install egora
-egora train meta-llama/Llama-3.2-1B tatsu-lab/alpaca --epochs 1 --rank 16
-```
-
-### Links
-- **GitHub**: [ArsSocratica/EgoRA](https://github.com/ArsSocratica/EgoRA)
-- **PyPI**: [egora](https://pypi.org/project/egora/)
-- **DOI**: [10.5281/zenodo.19410504](https://doi.org/10.5281/zenodo.19410504)
-
-### License
-AGPL-3.0 with Academic Additional Permission. Free for research (citation required).
-
-**Contact**: mark@dillerop.com
-                """)
-
-    # Launch
-    print(f"🧠 EgoRA v{__version__} — Launching Gradio demo...")
-    demo.launch(
-        server_name=args.host,
-        server_port=args.port,
-        share=args.share,
-    )
+    print(f"EgoRA v{__version__} — Launching Gradio demo...")
+    demo = build_demo(trust_remote_code=args.trust_remote_code)
+    launch_demo(demo, server_name=args.host, server_port=args.port, share=args.share)
 
 
 def cmd_version(args):
@@ -649,7 +412,10 @@ def main():
     p_diag.add_argument("tuned_model", help="Path or HF Hub name for the tuned model")
     p_diag.add_argument("-o", "--output", default=None, help="Output JSON path (default: stdout only)")
     p_diag.add_argument("-t", "--target-modules", default=None, help="Comma-separated projection names (default: q_proj,k_proj,v_proj,o_proj)")
-    p_diag.add_argument("--damage-threshold", type=float, default=5.0, help="Rotation threshold for damage classification (degrees, default: 5.0)")
+    p_diag.add_argument("--damage-threshold", type=float, default=None, help="Rotation threshold for damage classification (degrees, default: the verdict θ_crit)")
+    p_diag.add_argument("--granularity", choices=["projection", "head"], default="projection", help="Measure whole projections (default) or individual attention heads")
+    p_diag.add_argument("--head-dim", type=int, default=None, help="Attention head dimension (default: read from model config)")
+    p_diag.add_argument("--fixed-threshold", action="store_true", help="Use the fixed 5°/3° verdict thresholds instead of the model-specific θ_crit")
     p_diag.add_argument("--diversity", action="store_true", help="Also compute interhead diversity matrix")
     p_diag.add_argument("--plot", action="store_true", help="Generate rotation report plot (requires matplotlib)")
     p_diag.set_defaults(func=cmd_diagnose)
@@ -665,6 +431,7 @@ def main():
     p_demo.add_argument("--host", default="0.0.0.0", help="Server host (default: 0.0.0.0)")
     p_demo.add_argument("--port", type=int, default=7860, help="Server port (default: 7860)")
     p_demo.add_argument("--share", action="store_true", help="Create public Gradio share link")
+    p_demo.add_argument("--trust-remote-code", action="store_true", help="Allow models with custom code (only for models you trust)")
     p_demo.set_defaults(func=cmd_demo)
 
     # ── version ──────────────────────────────────────────────────────────────
