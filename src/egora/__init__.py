@@ -46,29 +46,36 @@ from egora._version import __version__
 
 # ── Adapters ──────────────────────────────────────────────────────────────────
 from egora.adapters import (
-    EgoRALoRALinear,
-    DoRALinear,
-    rsLoRALinear,
     ADAPTER_CLASSES,
+    DoRALinear,
+    EgoRALoRALinear,
     apply_lora,
+    effective_weight,
     get_total_egora_penalty,
-    refresh_all_shadows,
     merge_lora,
+    refresh_all_shadows,
+    rsLoRALinear,
     unmerge_lora,
+)
+
+# ── Geometry / Diagnostics ────────────────────────────────────────────────────
+from egora.geometry import (
+    compute_adapter_rotation,
+    compute_head_geometry,
+    compute_interhead_diversity,
+    rotation_verdict,
+    save_geometry,
 )
 
 # ── Governor ──────────────────────────────────────────────────────────────────
 from egora.governor import EntropyGovernor, GovernorConfig
 
-# ── Geometry / Diagnostics ────────────────────────────────────────────────────
-from egora.geometry import (
-    compute_head_geometry,
-    compute_interhead_diversity,
-    save_geometry,
-)
+# ── Model Info ────────────────────────────────────────────────────────────────
+from egora.model_info import summarize_model, theta_crit_deg
 
 # ── PEFT Compatibility ───────────────────────────────────────────────────────
-from egora.peft_compat import EgoRAPeftModel, EgoRALoraConfig
+from egora.peft_compat import EgoRALoraConfig, EgoRAPeftModel
+
 
 # ── Trainer Integration (lazy — requires transformers) ──────────────────────
 def __getattr__(name):
@@ -88,6 +95,7 @@ __all__ = [
     "rsLoRALinear",
     "ADAPTER_CLASSES",
     "apply_lora",
+    "effective_weight",
     "get_total_egora_penalty",
     "refresh_all_shadows",
     "merge_lora",
@@ -97,8 +105,13 @@ __all__ = [
     "GovernorConfig",
     # Geometry
     "compute_head_geometry",
+    "compute_adapter_rotation",
+    "rotation_verdict",
     "compute_interhead_diversity",
     "save_geometry",
+    # Model Info
+    "summarize_model",
+    "theta_crit_deg",
     # PEFT Compatibility
     "EgoRAPeftModel",
     "EgoRALoraConfig",

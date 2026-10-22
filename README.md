@@ -1,5 +1,6 @@
 # EgoRA — Entropy-Governed Orthogonality Regularization for Adaptation
 
+[![CI](https://github.com/ArsSocratica/EgoRA/actions/workflows/ci.yml/badge.svg)](https://github.com/ArsSocratica/EgoRA/actions/workflows/ci.yml)
 [![PyPI version](https://img.shields.io/pypi/v/egora)](https://pypi.org/project/egora/)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
@@ -97,7 +98,10 @@ egora diagnose meta-llama/Llama-3.2-1B ./my-finetuned-model -o results.json --pl
 # Show model architecture info (layers, d_head, θ_crit, LoRA param estimates)
 egora info meta-llama/Llama-3.2-1B
 
-# Launch interactive web demo (requires: pip install gradio)
+# Diagnose a LoRA adapter (PEFT or EgoRA) against its base model, per attention head
+egora diagnose Qwen/Qwen2.5-0.5B ./my-lora-adapter --granularity head
+
+# Launch interactive web demo: Diagnose, Model Info, EgoRA vs LoRA (pip install egora[demo])
 egora demo
 egora demo --share  # public link
 

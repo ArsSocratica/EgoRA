@@ -51,6 +51,15 @@ diagnostics = [
     "matplotlib>=3.5",
     "scipy>=1.7",
 ]
+demo = [
+    "gradio>=4.0",
+    "transformers>=4.40",
+    "accelerate",
+    "peft",
+    "datasets",
+    "pandas",
+    "matplotlib>=3.5",
+]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
@@ -79,6 +88,10 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]
+
+[tool.ruff.lint.per-file-ignores]
+# argparse help strings
+"src/egora/cli.py" = ["E501"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -12,13 +12,14 @@ Functions:
   - plot_rotation_report: Combined 4-panel report figure
 """
 
-from typing import Dict, Any, Optional, List
+from typing import Any, Dict, Optional
+
 import numpy as np
 
 
 def _check_matplotlib():
     try:
-        import matplotlib
+        import matplotlib  # noqa: F401
         import matplotlib.pyplot as plt
         return plt
     except ImportError:
@@ -26,6 +27,24 @@ def _check_matplotlib():
             "matplotlib is required for plotting. "
             "Install with: pip install egora[diagnostics]"
         )
+
+
+def _unit_label(results: Dict[str, Any]) -> str:
+    return "Heads" if results.get("granularity") == "head" else "Projections"
+
+
+def _thresholds(results: Dict[str, Any]):
+    """(critical, warning) angles used for threshold lines and the verdict."""
+    v = _verdict(results)
+    return v["theta_crit_deg"], v["warning_deg"]
+
+
+def _verdict(results: Dict[str, Any]) -> Dict[str, Any]:
+    from egora.geometry import rotation_verdict
+
+    if results.get("verdict"):
+        return results["verdict"]
+    return rotation_verdict(results.get("theta_bar_deg", 0.0), results.get("theta_crit_deg"))
 
 
 def plot_rotation_heatmap(
@@ -57,13 +76,19 @@ def plot_rotation_heatmap(
     proj_types = sorted(set(h["proj_type"] for h in heads))
     layers = sorted(set(h["layer"] for h in heads if h["layer"] is not None))
 
-    matrix = np.full((len(layers), len(proj_types)), np.nan)
-    layer_idx = {l: i for i, l in enumerate(layers)}
+    sums = np.zeros((len(layers), len(proj_types)))
+    counts = np.zeros((len(layers), len(proj_types)))
+    layer_idx = {layer: i for i, layer in enumerate(layers)}
     proj_idx = {p: i for i, p in enumerate(proj_types)}
 
+    # Per-head results have several entries per cell: show the cell mean.
     for h in heads:
         if h["layer"] is not None and h["proj_type"] in proj_idx:
-            matrix[layer_idx[h["layer"]], proj_idx[h["proj_type"]]] = h["rotation_angle_deg"]
+            i, j = layer_idx[h["layer"]], proj_idx[h["proj_type"]]
+            sums[i, j] += h["rotation_angle_deg"]
+            counts[i, j] += 1
+    with np.errstate(invalid="ignore"):
+        matrix = np.where(counts > 0, sums / np.maximum(counts, 1), np.nan)
 
     if vmax is None:
         vmax = max(10.0, np.nanmax(matrix) * 1.1)
@@ -87,7 +112,7 @@ def plot_rotation_heatmap(
         ax.set_yticklabels([str(layers[i]) for i in range(0, len(layers), step)], fontsize=7)
     else:
         ax.set_yticks(range(len(layers)))
-        ax.set_yticklabels([str(l) for l in layers], fontsize=7)
+        ax.set_yticklabels([str(layer) for layer in layers], fontsize=7)
     ax.set_ylabel("Layer")
 
     ax.set_title("Rotation Angle (degrees)", fontsize=11, fontweight="bold")
@@ -113,7 +138,7 @@ def plot_layer_profile(
     Args:
         results: Dict returned by :func:`egora.compute_head_geometry`.
         ax: Matplotlib axes. Created if None.
-        show_threshold: Draw the 5° critical threshold line.
+        show_threshold: Draw the critical (θ_crit) and warning threshold lines.
 
     Returns:
         Matplotlib Figure (only if ax was None).
@@ -125,8 +150,8 @@ def plot_layer_profile(
         raise ValueError("No per-layer data in results")
 
     layers = sorted(layer_means.keys(), key=lambda x: int(x))
-    angles = [layer_means[l] for l in layers]
-    x = [int(l) for l in layers]
+    angles = [layer_means[layer] for layer in layers]
+    x = [int(layer) for layer in layers]
 
     created_fig = ax is None
     if ax is None:
@@ -138,8 +163,11 @@ def plot_layer_profile(
     ax.plot(x, angles, color="#1565C0", linewidth=1.5, marker=".", markersize=3)
 
     if show_threshold:
-        ax.axhline(y=5.0, color="red", linewidth=1.0, linestyle="--", alpha=0.7, label="θ_crit = 5°")
-        ax.axhline(y=3.0, color="orange", linewidth=1.0, linestyle=":", alpha=0.6, label="Warning = 3°")
+        crit, warn = _thresholds(results)
+        ax.axhline(y=crit, color="red", linewidth=1.0, linestyle="--", alpha=0.7,
+                   label=f"θ_crit = {crit:.2f}°")
+        ax.axhline(y=warn, color="orange", linewidth=1.0, linestyle=":", alpha=0.6,
+                   label=f"Warning = {warn:.2f}°")
         ax.legend(fontsize=8, loc="upper right")
 
     ax.set_xlabel("Layer", fontsize=10)
@@ -203,7 +231,7 @@ def plot_mode_distribution(
                 f"{frac*100:.1f}%", va="center", fontsize=9, color="#333"
             )
 
-    ax.set_xlabel("Number of Heads", fontsize=10)
+    ax.set_xlabel(f"Number of {_unit_label(results)}", fontsize=10)
     ax.set_title("Learning Mode Distribution", fontsize=11, fontweight="bold")
     ax.invert_yaxis()
 
@@ -256,7 +284,7 @@ def plot_projection_comparison(
             f"{angle:.1f}°", ha="center", va="bottom", fontsize=9
         )
 
-    ax.axhline(y=5.0, color="red", linewidth=1.0, linestyle="--", alpha=0.5)
+    ax.axhline(y=_thresholds(results)[0], color="red", linewidth=1.0, linestyle="--", alpha=0.5)
     ax.set_ylabel("Mean θ (degrees)", fontsize=10)
     ax.set_title("Rotation by Projection Type", fontsize=11, fontweight="bold")
     ax.set_ylim(bottom=0)
@@ -297,7 +325,10 @@ def plot_rotation_report(
     n_heads = results.get("n_heads", 0)
 
     if suptitle is None:
-        suptitle = f"EgoRA Rotation Geometry Report — θ̄ = {theta_bar:.2f}° ({n_heads} heads)"
+        suptitle = (
+            f"EgoRA Rotation Geometry Report — θ̄ = {theta_bar:.2f}° "
+            f"({n_heads} {_unit_label(results).lower()})"
+        )
     fig.suptitle(suptitle, fontsize=14, fontweight="bold", y=0.98)
 
     # (A) Heatmap
@@ -333,15 +364,9 @@ def plot_rotation_report(
     ax_proj.set_title("(D) Projection Comparison", fontsize=11, fontweight="bold")
 
     # Verdict banner
-    if theta_bar < 3.0:
-        verdict = "✅ SAFE — Knowledge preserved"
-        color = "#4CAF50"
-    elif theta_bar < 5.0:
-        verdict = "⚠️ WARNING — Check benchmarks"
-        color = "#FF9800"
-    else:
-        verdict = "❌ DANGER — Knowledge loss expected"
-        color = "#F44336"
+    v = _verdict(results)
+    verdict = v["message"]
+    color = {"safe": "#4CAF50", "warning": "#FF9800", "danger": "#F44336"}[v["level"]]
 
     fig.text(
         0.5, 0.01, verdict,

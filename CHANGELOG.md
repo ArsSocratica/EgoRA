@@ -5,6 +5,29 @@ All notable changes to the `egora` package will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] — Unreleased
+
+### Fixed
+- **θ_crit in `egora info` / demo Model Info**: `d_head` was the full `q_proj` width (e.g. 896 for Qwen2.5-0.5B, giving θ_crit = 1.91°) instead of the per-head dimension (64 → 7.18°). It is now read from the model config.
+- **LoRA parameter estimates** now sum `r · (in + out)` over the actual target projections, so grouped-query attention (smaller K/V) is counted correctly.
+- **Transformers 5 compatibility**: `Trainer(processing_class=...)` and `dtype=` are used when available (`tokenizer=` / `torch_dtype=` on older versions).
+- **Gradio 6**: theme is passed to `launch()`; no more constructor warning.
+- **Small-angle precision**: rotation angles were `arccos` of a float32 cosine similarity, which rounds sub-degree rotations badly (e.g. a true 0.23° read as 0.00° on a 1536×576 matrix). Angles are now computed in float64 via `atan2(‖orthogonal‖, parallel)` in `compute_head_geometry` and `compute_adapter_rotation`.
+
+### Added
+- **Per-head geometry**: `compute_head_geometry(..., granularity="head")` splits Q/K/V by rows and `o_proj` by columns per attention head (GQA-aware). `egora diagnose --granularity head`. The default stays `"projection"` (whole matrices), and results now report `granularity`, `head_dim` and `theta_crit_deg`.
+- **Model-specific verdict**: `rotation_verdict()` and `results["verdict"]` use θ_crit = arcsin(1/√d_head) (warning at 0.6·θ_crit) when the head dimension is known; `--fixed-threshold` / `verdict_theta_crit=5.0` restores the fixed 3°/5° cutoffs. Plots use the same thresholds.
+- **Adapter diagnostics**: `egora diagnose` and the demo accept a PEFT or EgoRA adapter folder/Hub id as the fine-tuned model (merged into a copy of the base; `egora.loading`).
+- **`compute_adapter_rotation()`** and **`effective_weight()`**: rotation of live adapter modules without merging.
+- **`egora.model_info`**: `get_attention_dims()`, `summarize_model()`, `theta_crit_deg()`; `egora info` reads only the config (no weight download).
+- **Demo** (`egora.demo`, `pip install egora[demo]`): example model pairs, projection/head granularity, per-layer and most-rotated tables, JSON/PNG downloads, cached base models, and an **EgoRA vs LoRA** tab that fine-tunes the same model twice with identical seed/data and plots θ̄, loss and a general-text probe live (CUDA/MPS/CPU).
+- **HuggingFace Spaces** app in `spaces/`.
+- **GitHub Actions CI**: ruff + pytest on Python 3.9–3.12.
+
+### Changed
+- `egora diagnose --damage-threshold` defaults to the verdict θ_crit instead of 5°.
+- `egora diagnose` loads models in their stored dtype instead of fp32 (half the memory for bf16 checkpoints).
+
 ## [0.5.3] — 2026-04-07
 
 ### Added

@@ -24,8 +24,8 @@ Usage::
 
 import json
 import os
-from dataclasses import dataclass, field, asdict
-from typing import Optional, List, Dict, Any
+from dataclasses import asdict, dataclass
+from typing import Any, Dict, List, Optional
 
 import torch
 import torch.nn as nn

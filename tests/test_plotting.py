@@ -3,7 +3,6 @@
 import pytest
 import torch
 import torch.nn as nn
-import numpy as np
 
 from egora.geometry import compute_head_geometry
 

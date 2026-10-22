@@ -27,11 +27,96 @@ Usage::
 import json
 import os
 from collections import defaultdict
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import torch
 import torch.nn.functional as F
+
+VERDICT_FIXED_CRIT_DEG = 5.0
+VERDICT_WARNING_RATIO = 0.6
+
+_INPUT_SPLIT_PROJECTIONS = ("o_proj", "out_proj", "dense")
+
+
+def rotation_verdict(
+    theta_bar_deg: float,
+    theta_crit: Optional[float] = None,
+) -> Dict[str, Any]:
+    """Classify a mean rotation against the Rotation-Retention thresholds.
+
+    Args:
+        theta_bar_deg: Mean rotation angle θ̄ in degrees.
+        theta_crit: Critical angle in degrees. Defaults to the fixed 5°.
+            Pass the model-specific ``arcsin(1/√d_head)`` to scale thresholds
+            to the architecture.
+
+    Returns:
+        Dict with ``level`` (``"safe"``, ``"warning"`` or ``"danger"``),
+        ``message``, ``theta_crit_deg`` and ``warning_deg``
+        (``0.6 × θ_crit``, i.e. 3° for the fixed 5°).
+    """
+    crit = float(theta_crit) if theta_crit else VERDICT_FIXED_CRIT_DEG
+    warn = VERDICT_WARNING_RATIO * crit
+    if theta_bar_deg < warn:
+        level, msg = "safe", f"SAFE — Knowledge well preserved (θ̄ < {warn:.2f}°)"
+    elif theta_bar_deg < crit:
+        level, msg = "warning", f"WARNING — Moderate rotation ({warn:.2f}° ≤ θ̄ < {crit:.2f}°)"
+    else:
+        level, msg = "danger", f"DANGER — Significant knowledge loss expected (θ̄ ≥ {crit:.2f}°)"
+    return {"level": level, "message": msg, "theta_crit_deg": crit, "warning_deg": warn}
+
+
+def _angle_deg(a: torch.Tensor, b: torch.Tensor) -> float:
+    """Angle between two flattened tensors in degrees.
+
+    Uses float64 and atan2 of the orthogonal/parallel components:
+    arccos of a float32 cosine similarity loses all precision below ~0.5°.
+    """
+    a = a.detach().double().flatten()
+    b = b.detach().double().flatten()
+    a_norm = a.norm()
+    if a_norm == 0 or b.norm() == 0:
+        return 90.0
+    par = torch.dot(a, b) / a_norm
+    perp = (b - (par / a_norm) * a).norm()
+    return float(np.degrees(torch.atan2(perp, par).item()))
+
+
+def _unit_metrics(w_base: torch.Tensor, w_tuned: torch.Tensor, damage_threshold_deg: float):
+    w_base = w_base.float().flatten()
+    w_tuned = w_tuned.float().flatten()
+
+    theta_deg = _angle_deg(w_base, w_tuned)
+    cos_sim = float(np.cos(np.radians(theta_deg)))
+
+    mag_base = w_base.norm().item()
+    mag_tuned = w_tuned.norm().item()
+    mag_ratio = mag_tuned / max(mag_base, 1e-10)
+
+    # Learning mode classification (patent Section 14E)
+    if theta_deg < damage_threshold_deg and 0.9 < mag_ratio < 1.1:
+        mode = "preserved"
+    elif theta_deg < damage_threshold_deg and mag_ratio >= 1.1:
+        mode = "additive"
+    elif theta_deg >= damage_threshold_deg and mag_ratio >= 0.9:
+        mode = "substitutive"
+    else:
+        mode = "damaged"
+    return cos_sim, theta_deg, mag_ratio, mode
+
+
+def _split_heads(w: torch.Tensor, proj_type: str, head_dim: int):
+    """Split a projection weight into per-head blocks.
+
+    Q/K/V weights are ``(n_heads * d_head, hidden)`` and are split along rows;
+    output projections are ``(hidden, n_heads * d_head)`` and are split along
+    columns. Returns ``None`` if the shape is not divisible by ``head_dim``.
+    """
+    dim = 1 if proj_type in _INPUT_SPLIT_PROJECTIONS else 0
+    if w.dim() != 2 or w.shape[dim] % head_dim != 0:
+        return None
+    return list(torch.split(w, head_dim, dim=dim))
 
 
 def compute_head_geometry(
@@ -39,22 +124,48 @@ def compute_head_geometry(
     tuned_model: torch.nn.Module,
     target_modules: Optional[List[str]] = None,
     damage_threshold_deg: float = 5.0,
+    granularity: str = "projection",
+    head_dim: Optional[int] = None,
+    verdict_theta_crit: Optional[float] = None,
 ) -> Dict[str, Any]:
-    """Compute per-head representational geometry between base and tuned model.
+    """Compute representational rotation geometry between base and tuned model.
 
     Args:
         base_model: Pre-trained model (reference).
         tuned_model: Fine-tuned model (or model with merged LoRA).
         target_modules: Projection names to analyze.
             Default: ``['q_proj', 'k_proj', 'v_proj', 'o_proj']``.
-        damage_threshold_deg: Rotation angle (degrees) above which a head
+        damage_threshold_deg: Rotation angle (degrees) above which a unit
             is classified as ``"substitutive"`` or ``"damaged"``.
+        granularity: ``"projection"`` (default) measures each whole
+            projection matrix; ``"head"`` splits every projection into
+            attention heads (GQA-aware: K/V use the key/value head count).
+        head_dim: Attention head dimension. Read from ``base_model.config``
+            when omitted. Required for ``granularity="head"``.
+        verdict_theta_crit: Critical angle for the ``verdict``. Defaults to the
+            model-specific ``arcsin(1/√d_head)`` when ``head_dim`` is known,
+            else 5°. Pass ``5.0`` for the fixed thresholds.
 
     Returns:
-        Dict with per-head metrics and aggregate statistics.
+        Dict with per-unit metrics (``heads``) and aggregate statistics.
+        ``n_heads`` is the number of analyzed units (projections or heads,
+        see ``granularity``). ``theta_crit_deg`` is set when ``head_dim``
+        is known.
     """
+    from egora.model_info import get_attention_dims, theta_crit_deg
+
     if target_modules is None:
         target_modules = ['q_proj', 'k_proj', 'v_proj', 'o_proj']
+    if granularity not in ("projection", "head"):
+        raise ValueError(f"granularity must be 'projection' or 'head', got {granularity!r}")
+
+    if head_dim is None:
+        head_dim = get_attention_dims(base_model)["head_dim"]
+    if granularity == "head" and not head_dim:
+        raise ValueError(
+            "granularity='head' needs head_dim: pass it explicitly or use a model "
+            "with a HuggingFace config"
+        )
 
     heads: List[Dict[str, Any]] = []
     layer_rotations: Dict[int, List[float]] = defaultdict(list)
@@ -78,7 +189,6 @@ def compute_head_geometry(
 
         tuned_param = tuned_params[name]
 
-        # Extract layer number
         layer_num = None
         for part in name.split('.'):
             if part.isdigit():
@@ -86,45 +196,34 @@ def compute_head_geometry(
                 break
 
         with torch.no_grad():
-            w_base = base_param.float().flatten()
-            w_tuned = tuned_param.float().flatten()
+            w_base = base_param.detach().cpu()
+            w_tuned = tuned_param.detach().cpu()
+            units = [(None, w_base, w_tuned)]
+            if granularity == "head":
+                base_blocks = _split_heads(w_base, proj_type, head_dim)
+                tuned_blocks = _split_heads(w_tuned, proj_type, head_dim)
+                if base_blocks is not None and tuned_blocks is not None:
+                    units = [
+                        (i, b, t) for i, (b, t) in enumerate(zip(base_blocks, tuned_blocks))
+                    ]
 
-            cos_sim = F.cosine_similarity(
-                w_base.unsqueeze(0), w_tuned.unsqueeze(0)
-            ).item()
-            cos_sim = max(-1.0, min(1.0, cos_sim))
-
-            theta_rad = np.arccos(cos_sim)
-            theta_deg = float(np.degrees(theta_rad))
-
-            mag_base = w_base.norm().item()
-            mag_tuned = w_tuned.norm().item()
-            mag_ratio = mag_tuned / max(mag_base, 1e-10)
-
-            # Learning mode classification (patent Section 14E)
-            if theta_deg < damage_threshold_deg and 0.9 < mag_ratio < 1.1:
-                mode = "preserved"
-            elif theta_deg < damage_threshold_deg and mag_ratio >= 1.1:
-                mode = "additive"
-            elif theta_deg >= damage_threshold_deg and mag_ratio >= 0.9:
-                mode = "substitutive"
-            else:
-                mode = "damaged"
-
-        head_info = {
-            'name': name,
-            'layer': layer_num,
-            'proj_type': proj_type,
-            'cosine_similarity': cos_sim,
-            'rotation_angle_deg': theta_deg,
-            'magnitude_ratio': mag_ratio,
-            'learning_mode': mode,
-        }
-        heads.append(head_info)
-
-        if layer_num is not None:
-            layer_rotations[layer_num].append(theta_deg)
-        proj_rotations[proj_type].append(theta_deg)
+            for head_idx, wb, wt in units:
+                cos_sim, theta_deg, mag_ratio, mode = _unit_metrics(
+                    wb, wt, damage_threshold_deg
+                )
+                heads.append({
+                    'name': name if head_idx is None else f"{name}[head={head_idx}]",
+                    'layer': layer_num,
+                    'proj_type': proj_type,
+                    'head': head_idx,
+                    'cosine_similarity': cos_sim,
+                    'rotation_angle_deg': theta_deg,
+                    'magnitude_ratio': mag_ratio,
+                    'learning_mode': mode,
+                })
+                if layer_num is not None:
+                    layer_rotations[layer_num].append(theta_deg)
+                proj_rotations[proj_type].append(theta_deg)
 
     # Aggregate statistics
     all_angles = [h['rotation_angle_deg'] for h in heads]
@@ -135,6 +234,8 @@ def compute_head_geometry(
         return {"error": "No matching parameters found", "heads": []}
 
     theta_bar = float(np.mean(all_angles))
+    theta_crit = theta_crit_deg(head_dim) if head_dim else None
+    verdict = rotation_verdict(theta_bar, verdict_theta_crit or theta_crit)
     theta_std = float(np.std(all_angles))
     theta_max = float(np.max(all_angles))
     theta_min = float(np.min(all_angles))
@@ -146,8 +247,8 @@ def compute_head_geometry(
     mode_fractions = {m: c / n_heads for m, c in mode_counts.items()}
 
     layer_means = {
-        l: float(np.mean(angles))
-        for l, angles in sorted(layer_rotations.items())
+        layer: float(np.mean(angles))
+        for layer, angles in sorted(layer_rotations.items())
     }
     proj_means = {
         p: float(np.mean(angles))
@@ -156,6 +257,11 @@ def compute_head_geometry(
 
     return {
         "n_heads": n_heads,
+        "granularity": granularity,
+        "head_dim": head_dim,
+        "theta_crit_deg": theta_crit,
+        "verdict": verdict,
+        "damage_threshold_deg": damage_threshold_deg,
         "theta_bar_deg": theta_bar,
         "theta_std_deg": theta_std,
         "theta_max_deg": theta_max,
@@ -223,6 +329,33 @@ def compute_interhead_diversity(
             sim_matrix[j, i] = cs
 
     return sim_matrix, head_names
+
+
+def compute_adapter_rotation(lora_modules) -> Dict[str, Any]:
+    """Rotation of each adapted projection relative to its frozen base weight.
+
+    Cheap enough to call during training: no model copy or merge is needed.
+
+    Args:
+        lora_modules: Adapter modules returned by :func:`egora.apply_lora`.
+
+    Returns:
+        Dict with ``theta_bar_deg``, ``theta_max_deg`` and per-module angles
+        (``per_module_deg``).
+    """
+    from egora.adapters import effective_weight
+
+    angles = []
+    with torch.no_grad():
+        for m in lora_modules:
+            angles.append(_angle_deg(m.base_linear.weight, effective_weight(m)))
+    if not angles:
+        return {"theta_bar_deg": 0.0, "theta_max_deg": 0.0, "per_module_deg": []}
+    return {
+        "theta_bar_deg": float(np.mean(angles)),
+        "theta_max_deg": float(np.max(angles)),
+        "per_module_deg": angles,
+    }
 
 
 def save_geometry(results: Dict[str, Any], output_path: str) -> None:

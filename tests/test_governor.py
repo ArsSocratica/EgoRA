@@ -1,8 +1,6 @@
 """Unit tests for the EntropyGovernor."""
 
-import math
 import torch
-import pytest
 
 from egora.governor import EntropyGovernor, GovernorConfig
 
