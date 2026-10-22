@@ -67,13 +67,28 @@ def rotation_verdict(
     return {"level": level, "message": msg, "theta_crit_deg": crit, "warning_deg": warn}
 
 
+def _angle_deg(a: torch.Tensor, b: torch.Tensor) -> float:
+    """Angle between two flattened tensors in degrees.
+
+    Uses float64 and atan2 of the orthogonal/parallel components:
+    arccos of a float32 cosine similarity loses all precision below ~0.5°.
+    """
+    a = a.detach().double().flatten()
+    b = b.detach().double().flatten()
+    a_norm = a.norm()
+    if a_norm == 0 or b.norm() == 0:
+        return 90.0
+    par = torch.dot(a, b) / a_norm
+    perp = (b - (par / a_norm) * a).norm()
+    return float(np.degrees(torch.atan2(perp, par).item()))
+
+
 def _unit_metrics(w_base: torch.Tensor, w_tuned: torch.Tensor, damage_threshold_deg: float):
     w_base = w_base.float().flatten()
     w_tuned = w_tuned.float().flatten()
 
-    cos_sim = F.cosine_similarity(w_base.unsqueeze(0), w_tuned.unsqueeze(0)).item()
-    cos_sim = max(-1.0, min(1.0, cos_sim))
-    theta_deg = float(np.degrees(np.arccos(cos_sim)))
+    theta_deg = _angle_deg(w_base, w_tuned)
+    cos_sim = float(np.cos(np.radians(theta_deg)))
 
     mag_base = w_base.norm().item()
     mag_tuned = w_tuned.norm().item()
@@ -333,10 +348,7 @@ def compute_adapter_rotation(lora_modules) -> Dict[str, Any]:
     angles = []
     with torch.no_grad():
         for m in lora_modules:
-            w_base = m.base_linear.weight.float()
-            w_eff = effective_weight(m)
-            cos = F.cosine_similarity(w_base.flatten().unsqueeze(0), w_eff.flatten().unsqueeze(0))
-            angles.append(float(np.degrees(np.arccos(max(-1.0, min(1.0, cos.item()))))))
+            angles.append(_angle_deg(m.base_linear.weight, effective_weight(m)))
     if not angles:
         return {"theta_bar_deg": 0.0, "theta_max_deg": 0.0, "per_module_deg": []}
     return {

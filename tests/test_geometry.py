@@ -204,3 +204,20 @@ def test_mode_fractions_sum_to_one():
 
     total = sum(results["mode_fractions"].values())
     assert total == pytest.approx(1.0, abs=1e-10)
+
+
+def test_small_angles_are_precise():
+    """Sub-degree rotations must not be lost to float32 arccos rounding."""
+    import math
+
+    from egora.geometry import _angle_deg
+
+    torch.manual_seed(0)
+    w = torch.randn(1536, 576) * 0.05
+    for rel in (1e-3, 4e-3, 1e-2, 0.1):
+        d = torch.randn_like(w)
+        d -= (d * w).sum() / (w * w).sum() * w
+        d = d / d.norm() * w.norm() * rel
+        assert abs(_angle_deg(w, w + d) - math.degrees(math.atan(rel))) < 1e-4
+    assert _angle_deg(w, 2 * w) < 1e-4
+    assert abs(_angle_deg(w, -w) - 180.0) < 1e-4

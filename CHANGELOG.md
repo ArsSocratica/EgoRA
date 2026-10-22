@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **LoRA parameter estimates** now sum `r · (in + out)` over the actual target projections, so grouped-query attention (smaller K/V) is counted correctly.
 - **Transformers 5 compatibility**: `Trainer(processing_class=...)` and `dtype=` are used when available (`tokenizer=` / `torch_dtype=` on older versions).
 - **Gradio 6**: theme is passed to `launch()`; no more constructor warning.
+- **Small-angle precision**: rotation angles were `arccos` of a float32 cosine similarity, which rounds sub-degree rotations badly (e.g. a true 0.23° read as 0.00° on a 1536×576 matrix). Angles are now computed in float64 via `atan2(‖orthogonal‖, parallel)` in `compute_head_geometry` and `compute_adapter_rotation`.
 
 ### Added
 - **Per-head geometry**: `compute_head_geometry(..., granularity="head")` splits Q/K/V by rows and `o_proj` by columns per attention head (GQA-aware). `egora diagnose --granularity head`. The default stays `"projection"` (whole matrices), and results now report `granularity`, `head_dim` and `theta_crit_deg`.
